@@ -1,14 +1,49 @@
+#include "types.h"
+#include "memlayout.h"
+#include "riscv.h"
+#include "course_sid.h"
+
+/* 声明 C 语言主入口函数 */
+void main();
+
 /*
- * lab1 初始骨架代码(自动生成): 系统启动与串口控制台输出。
- * 启动至此的前期初始化流程，需要由你在本实验中设计并实现。
- * 你需要实现: entry.S(start 前的 M 态准备可另置 start.c)、串口轮询输出、
- * 最小 printf。链接脚本 kernel.ld 带注释保留; 底层宏 riscv.h 完整保留。
- * 代码导读路线与设计引导问题详见《实验说明书(lab1)》。
- *
- * 两个环境注意事项(说明书 §2"环境前置条件"与附录 C, 动手前必读):
- *  1. start() 的 M→S 切换清单必须包含 PMP 配置(最简两行):
- *       w_pmpaddr0(0x3fffffffffffffull); w_pmpcfg0(0xf);
- *     否则在新版 QEMU 上 mret 进 S 态的第一条取指即触发 fault(全程无输出)。
- *  2. entry.S 里的陷阱向量标号前加 .balign 4(mtvec 要求 4 字节对齐,
- *     不满足时写入会被硬件静默丢弃)。
+ * start(): entry.S 建立初始内核栈后在 M 态调用的初始化例程
+ * 负责完成从 Machine 模式降权切换到 Supervisor 模式的关键配置清单
  */
+void
+start()
+{
+  // 1. 配置 mstatus.MPP 为 S 模式 (Supervisor)
+  // 使得执行 mret 指令时 CPU 能正确降权进入 S 态
+  unsigned long x = r_mstatus();
+  x &= ~MSTATUS_MPP_MASK;
+  x |= MSTATUS_MPP_S;
+  w_mstatus(x);
+
+  // 2. 将 mepc 目标地址指向 main 函数
+  // mret 执行后硬件将把 PC 设置为 mepc 的值
+  w_mepc((uint64)main);
+
+  // 3. 禁用地址翻译与保护(Bare 模式, satp = 0)
+  // 启动初期尚未建立内核页表, 此时虚拟地址直接等于物理地址
+  w_satp(0);
+
+  // 4. 中断与异常委托配置 (Machine Delegation)
+  // 将所有中断与异常委托给 Supervisor 态处理
+  w_medeleg(0xffff);
+  w_mideleg(0xffff);
+  // lab1 采用轮询方式输出, 此时关闭 S 态所有中断
+  w_sie(0);
+
+  // 5. PMP (物理内存保护) 配置: 必选前置条件
+  // 授予 Supervisor 态访问全部物理内存的读写执行权限(NAPOT模式, R/W/X=1)
+  // 若缺失此项, mret 降入 S 态取指即报 instruction access fault (cause=1)
+  w_pmpaddr0(0x3fffffffffffffull);
+  w_pmpcfg0(0xf);
+
+  // 6. 保持当前 CPU 的 hartid 于 tp 寄存器中
+  w_tp(r_mhartid());
+
+  // 7. 执行 mret, 硬件原子完成特权级降入 S 态并跳转至 main()
+  asm volatile("mret");
+}

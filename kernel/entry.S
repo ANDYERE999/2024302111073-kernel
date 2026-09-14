@@ -1,14 +1,50 @@
+#include "course_sid.h"
+
 /*
- * lab1 初始骨架代码(自动生成): 系统启动与串口控制台输出。
- * 启动至此的前期初始化流程，需要由你在本实验中设计并实现。
- * 你需要实现: entry.S(start 前的 M 态准备可另置 start.c)、串口轮询输出、
- * 最小 printf。链接脚本 kernel.ld 带注释保留; 底层宏 riscv.h 完整保留。
- * 代码导读路线与设计引导问题详见《实验说明书(lab1)》。
- *
- * 两个环境注意事项(说明书 §2"环境前置条件"与附录 C, 动手前必读):
- *  1. start() 的 M→S 切换清单必须包含 PMP 配置(最简两行):
- *       w_pmpaddr0(0x3fffffffffffffull); w_pmpcfg0(0xf);
- *     否则在新版 QEMU 上 mret 进 S 态的第一条取指即触发 fault(全程无输出)。
- *  2. entry.S 里的陷阱向量标号前加 .balign 4(mtvec 要求 4 字节对齐,
- *     不满足时写入会被硬件静默丢弃)。
+ * entry.S: RISC-V 裸机第一条指令入口
+ * 链接脚本 kernel.ld 将 _entry 放置在 0x80000000
  */
+
+.section .text
+.globl _entry
+_entry:
+    # 1. 立即关闭机器模式所有中断(mie 置 0)
+    # 防止在栈未初始化、异常向量未设置前响应外部/时钟中断导致系统崩溃
+    csrw mie, zero
+
+    # 2. 从核(mhartid != 0)挂起
+    # 多核并发时避免各核心争用初始内核栈与未初始化的全局数据
+    csrr tp, mhartid
+    bnez tp, park
+
+    # 3. 设置初始内核栈
+    # 栈由高向低生长, 栈顶设为 bootstack + LAB1_STACK_KB * 1024
+    la   sp, bootstack
+    li   t0, LAB1_STACK_KB * 1024
+    add  sp, sp, t0
+
+    # 4. 配置机器模式初始陷阱向量基址寄存器(mtvec)
+    # 标号 park_trap 严格 4 字节对齐, 避免 QEMU 静默丢弃写入
+    la   t1, park_trap
+    csrw mtvec, t1
+
+    # 5. 跳转至 C 语言入口 start()
+    call start
+
+    # 兜底自旋
+park:
+    wfi
+    j park
+
+    # mtvec 要求必须 4 字节对齐(低 2 位为模式位)
+.balign 4
+park_trap:
+    wfi
+    j park_trap
+
+.section .bss
+.balign 16
+.globl bootstack
+bootstack:
+    # 初始内核栈空间: 12KB, 必须符合个性化参数 LAB1_STACK_KB
+    .space LAB1_STACK_KB * 1024
