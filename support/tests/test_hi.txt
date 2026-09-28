@@ -1,0 +1,3 @@
+SEND hi
+WAIT 500
+EXPECT hi: user program running, pid=

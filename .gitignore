@@ -8,4 +8,5 @@ kernel/userimg.S
 kernel/userimg.S.tmp
 user/usys.S
 user-flat/
+fs.img
 提交-*.zip

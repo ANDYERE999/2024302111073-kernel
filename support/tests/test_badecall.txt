@@ -1,0 +1,3 @@
+SEND badecall
+WAIT 500
+EXPECT TEST-1 PASS: unknown syscalls all return -1

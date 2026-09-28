@@ -39,6 +39,11 @@ def main():
     with open(args.script) as f:
         cmds = [l.strip() for l in f if l.strip() and not l.startswith("#")]
 
+    fs_path = os.path.join(args.tree, "fs.img")
+    if not os.path.exists(fs_path):
+        with open(fs_path, "wb") as f:
+            f.truncate(1024 * 1024)
+
     proc = subprocess.Popen([QEMU] + QEMU_ARGS, cwd=args.tree,
                             stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                             stderr=subprocess.STDOUT, bufsize=0)

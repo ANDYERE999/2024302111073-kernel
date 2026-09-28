@@ -1,9 +1,9 @@
 #include "types.h"
+#include "param.h"
+#include "memlayout.h"
 #include "riscv.h"
 #include "course_sid.h"
-
-void consoleinit(void);
-int printf(char *fmt, ...);
+#include "defs.h"
 
 /*
  * 将无符号整数转换为字符串
@@ -136,6 +136,7 @@ main(void)
 {
   // 1. 初始化控制台与底层 UART 16550 驱动
   consoleinit();
+  printfinit();
 
   // 2. 打印个性化 Banner 与自检序列 (严格匹配 expect_banner.txt)
   print_banner();
@@ -145,8 +146,23 @@ main(void)
   test_printf_boundaries();
 #endif
 
-  // 3. 停机死循环 (等待中断或自旋)
-  for (;;) {
-    asm volatile("wfi");
-  }
+  // 3. 内存管理与虚拟地址分页初始化
+  kinit();         // 物理页面分配器
+  kvminit();       // 内核页表创建
+  kvminithart();   // 开启 Sv39 硬件地址翻译
+
+  // 4. 进程与中断机制初始化
+  procinit();      // 进程表与内核栈映射
+  trapinit();      // 陷阱锁初始化
+  trapinithart();  // 安装内核陷阱向量 kernelvec
+  plicinit();      // PLIC 中断控制器硬件配置
+  plicinithart();  // 开启当前 CPU 核心的 PLIC 外部中断响应
+
+  // 5. 加载并装配第一个用户态进程 Shell (sh)
+  userinit();
+
+  __sync_synchronize();
+
+  // 6. 正式进入进程调度循环，切入用户态
+  scheduler();
 }

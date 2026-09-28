@@ -1,10 +1,25 @@
 #include <stdarg.h>
 #include "types.h"
+#include "param.h"
+#include "spinlock.h"
 #include "riscv.h"
+#include "defs.h"
 
 void consputc(int c);
 
 static char digits[] = "0123456789abcdef";
+
+static struct {
+  struct spinlock lock;
+  int locking;
+} pr;
+
+void
+printfinit(void)
+{
+  initlock(&pr.lock, "pr");
+  pr.locking = 1;
+}
 
 /*
  * printint: 整数格式化打印
@@ -66,9 +81,14 @@ printf(char *fmt, ...)
   va_list ap;
   int i, c;
   char *s;
+  int locking;
 
   if (fmt == 0)
     return 0;
+
+  locking = pr.locking;
+  if (locking)
+    acquire(&pr.lock);
 
   va_start(ap, fmt);
   for (i = 0; (c = fmt[i] & 0xff) != 0; i++) {
@@ -118,6 +138,9 @@ printf(char *fmt, ...)
   }
   va_end(ap);
 
+  if (locking)
+    release(&pr.lock);
+
   return 0;
 }
 
@@ -127,6 +150,7 @@ printf(char *fmt, ...)
 void
 panic(char *s)
 {
+  pr.locking = 0;
   printf("panic: %s\n", s);
   for (;;)
     ;
