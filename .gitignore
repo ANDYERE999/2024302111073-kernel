@@ -1,0 +1,11 @@
+.vscode/
+kernel/.vscode/
+*.o
+*.d
+*.log
+kernel/kernel
+kernel/userimg.S
+kernel/userimg.S.tmp
+user/usys.S
+user-flat/
+提交-*.zip
