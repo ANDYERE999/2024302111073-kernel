@@ -124,7 +124,7 @@ usertrap(void)
     exit(-1);
 
   // give up the CPU if this is a timer interrupt and tick interval is reached.
-  if (which_dev == 2 && (ticks % LAB2_TICK) == 0)
+  if (which_dev == 2 && (ticks % LAB2_TICK) == 0) //LAB2_TICK=3
     yield();
 
   usertrapret();
